@@ -1,0 +1,1255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Sequential Thinking</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --app-bg: var(--color-background-primary, #ffffff);
+      --app-bg-soft: var(--color-background-secondary, #f7f7f5);
+      --app-bg-quiet: var(--color-background-tertiary, #efefec);
+      --app-text: var(--color-text-primary, #181817);
+      --app-text-soft: var(--color-text-secondary, #62625f);
+      --app-text-faint: var(--color-text-tertiary, #8a8a85);
+      --app-border: var(--color-border-secondary, rgba(24, 24, 23, 0.14));
+      --app-border-strong: var(--color-border-primary, rgba(24, 24, 23, 0.24));
+      --app-accent: var(--color-text-info, #4f67d8);
+      --app-accent-soft: var(--color-background-info, rgba(79, 103, 216, 0.10));
+      --app-success: var(--color-text-success, #247a50);
+      --app-success-soft: var(--color-background-success, rgba(36, 122, 80, 0.10));
+      --app-warning: var(--color-text-warning, #9a6213);
+      --app-warning-soft: var(--color-background-warning, rgba(154, 98, 19, 0.11));
+      --app-danger: var(--color-text-danger, #b84242);
+      --app-danger-soft: var(--color-background-danger, rgba(184, 66, 66, 0.10));
+      --app-font: var(--font-sans, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+      --app-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+      --app-radius: var(--border-radius-lg, 14px);
+      --app-radius-sm: var(--border-radius-md, 8px);
+      --safe-top: 0px;
+      --safe-right: 0px;
+      --safe-bottom: 0px;
+      --safe-left: 0px;
+    }
+
+    :root[data-theme="dark"] {
+      --app-bg: var(--color-background-primary, #171716);
+      --app-bg-soft: var(--color-background-secondary, #20201e);
+      --app-bg-quiet: var(--color-background-tertiary, #292927);
+      --app-text: var(--color-text-primary, #f1f1ed);
+      --app-text-soft: var(--color-text-secondary, #b7b7b0);
+      --app-text-faint: var(--color-text-tertiary, #85857f);
+      --app-border: var(--color-border-secondary, rgba(255, 255, 255, 0.13));
+      --app-border-strong: var(--color-border-primary, rgba(255, 255, 255, 0.22));
+      --app-accent: var(--color-text-info, #9caeff);
+      --app-accent-soft: var(--color-background-info, rgba(156, 174, 255, 0.12));
+      --app-success: var(--color-text-success, #71c99a);
+      --app-success-soft: var(--color-background-success, rgba(113, 201, 154, 0.12));
+      --app-warning: var(--color-text-warning, #e5b967);
+      --app-warning-soft: var(--color-background-warning, rgba(229, 185, 103, 0.12));
+      --app-danger: var(--color-text-danger, #f08a8a);
+      --app-danger-soft: var(--color-background-danger, rgba(240, 138, 138, 0.12));
+    }
+
+    * { box-sizing: border-box; }
+
+    /* The hidden attribute must always win, even over class display rules. */
+    [hidden] { display: none !important; }
+
+    html, body {
+      margin: 0;
+      min-width: 0;
+      background: transparent;
+      color: var(--app-text);
+      font-family: var(--app-font);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      padding: calc(4px + var(--safe-top)) calc(4px + var(--safe-right))
+        calc(4px + var(--safe-bottom)) calc(4px + var(--safe-left));
+    }
+
+    button {
+      font: inherit;
+      color: inherit;
+    }
+
+    .sr-only {
+      position: absolute;
+      overflow: hidden;
+      width: 1px;
+      height: 1px;
+      white-space: nowrap;
+      clip-path: inset(50%);
+    }
+
+    /* Ordinary cards are rail segments of one continuous thread; the final
+       (or errored) card gets the box, closing the sequence. */
+    .card {
+      --pad-x: 10px;
+      position: relative;
+      width: 100%;
+      max-width: 880px;
+      margin-inline: auto;
+      border-left: 2px solid var(--app-border);
+      border-left-color: color-mix(in srgb, var(--app-accent) 42%, transparent);
+      background: transparent;
+    }
+
+    .card.boxed {
+      --pad-x: 14px;
+      overflow: hidden;
+      border: 1px solid var(--app-border);
+      border-radius: var(--app-radius);
+      background: var(--app-bg);
+      box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.06));
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px var(--pad-x) 4px;
+    }
+
+    .mark {
+      display: grid;
+      width: 20px;
+      height: 20px;
+      flex: 0 0 20px;
+      place-items: center;
+      border: 1px solid var(--app-border);
+      border-color: color-mix(in srgb, var(--app-accent) 34%, transparent);
+      border-radius: 7px;
+      background: var(--app-accent-soft);
+      color: var(--app-accent);
+    }
+
+    .mark svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    h1 {
+      margin: 0;
+      overflow: hidden;
+      min-width: 0;
+      flex: 1;
+      color: var(--app-text-soft);
+      font-size: 12px;
+      font-weight: var(--font-weight-semibold, 600);
+      letter-spacing: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+      font-size: 11px;
+      font-weight: var(--font-weight-semibold, 600);
+    }
+
+    .status.bare { color: var(--app-accent); }
+    .status.done { color: var(--app-success); font-size: 12px; }
+    .status.done .status-dot { display: none; }
+
+    .status.error {
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--app-danger-soft);
+      color: var(--app-danger);
+    }
+    .status.error .status-dot { display: none; }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status.bare .status-dot {
+      animation: breathe 1.8s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      0%, 100% { opacity: 0.45; transform: scale(0.86); }
+      50% { opacity: 1; transform: scale(1.08); }
+    }
+
+    .progress-track {
+      height: 2px;
+      margin: 2px var(--pad-x) 0;
+      border-radius: 1px;
+      background: var(--app-bg-quiet);
+    }
+
+    .progress-bar {
+      display: block;
+      width: 0;
+      height: 100%;
+      border-radius: 1px;
+      background: var(--app-accent);
+      transition: width 260ms ease;
+    }
+
+    .notice {
+      margin: 8px var(--pad-x) 0;
+      padding: 8px 10px;
+      border: 1px solid var(--app-border);
+      border-color: color-mix(in srgb, var(--app-warning) 30%, transparent);
+      border-radius: var(--app-radius-sm);
+      background: var(--app-warning-soft);
+      color: var(--app-warning);
+      font-size: 11px;
+    }
+
+    .notice.error {
+      border-color: color-mix(in srgb, var(--app-danger) 30%, transparent);
+      background: var(--app-danger-soft);
+      color: var(--app-danger);
+    }
+
+    .thought-view {
+      padding: 6px var(--pad-x) 10px;
+    }
+
+    .solo-text {
+      margin: 0;
+      max-width: 68ch;
+      color: var(--app-text);
+      font-size: 14px;
+      line-height: 1.62;
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(2px); }
+    }
+
+    .solo-text:not(.waiting) { animation: rise 220ms ease-out; }
+
+    .solo-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 10px;
+      margin-top: 8px;
+      color: var(--app-text-soft);
+      font-size: 11px;
+    }
+
+    .solo-meta:empty { display: none; }
+
+    .waiting {
+      color: var(--app-text-soft);
+      font-size: 12px;
+    }
+
+    /* Journey drawer: closed by default so the final card keeps the same
+       anatomy as its siblings; the timeline unfolds only on request. */
+    .journey {
+      border-top: 1px solid var(--app-border);
+    }
+
+    .journey-toggle {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      gap: 8px;
+      min-height: 38px;
+      padding: 7px var(--pad-x);
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .journey-toggle:hover:not([disabled]) {
+      background: color-mix(in oklab, var(--app-text) 5%, transparent);
+    }
+
+    .journey-toggle[disabled] { cursor: default; opacity: 0.6; }
+
+    .journey-toggle:focus-visible,
+    .quiet-button:focus-visible,
+    .thought-toggle:focus-visible {
+      outline: 2px solid var(--app-accent);
+      outline-offset: 2px;
+    }
+
+    .journey-caption {
+      overflow: hidden;
+      min-width: 0;
+      flex: 1;
+      color: var(--app-text);
+      font-size: 12px;
+      font-weight: var(--font-weight-semibold, 600);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .caption-sub {
+      color: var(--app-text-soft);
+      font-weight: 400;
+    }
+
+    .drawer-chevron {
+      width: 14px;
+      height: 14px;
+      flex: 0 0 auto;
+      color: var(--app-text-faint);
+      transition: transform 160ms ease;
+    }
+
+    .journey-toggle[aria-expanded="true"] .drawer-chevron {
+      transform: rotate(180deg);
+    }
+
+    .journey-body {
+      padding: 0 var(--pad-x) 12px;
+    }
+
+    .journey-tools {
+      display: flex;
+      justify-content: flex-end;
+      padding-bottom: 4px;
+    }
+
+    .quiet-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 26px;
+      padding: 3px 8px;
+      border: 1px solid transparent;
+      border-radius: var(--app-radius-sm);
+      background: transparent;
+      color: var(--app-text-soft);
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    .quiet-button:hover {
+      border-color: var(--app-border);
+      background: var(--app-bg);
+      color: var(--app-text);
+    }
+
+    .quiet-button svg {
+      width: 13px;
+      height: 13px;
+      transition: transform 160ms ease;
+    }
+
+    .quiet-button[aria-pressed="true"] svg {
+      transform: rotate(180deg);
+    }
+
+    .timeline {
+      position: relative;
+      display: grid;
+      margin: 0;
+      padding: 0;
+      gap: 6px;
+      list-style: none;
+    }
+
+    .thought-item {
+      --item-accent: var(--app-accent);
+      --item-soft: var(--app-accent-soft);
+      position: relative;
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 7px;
+    }
+
+    /* Revisions keep amber; branches stay on the accent hue and are told
+       apart by the dashed ring, so alert colors keep their meaning. */
+    .thought-item.revision {
+      --item-accent: var(--app-warning);
+      --item-soft: var(--app-warning-soft);
+    }
+
+    .node-column {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      padding-top: 8px;
+      z-index: 1;
+    }
+
+    /* Per-item connector segments stay exact at any row height. */
+    .node-column::after {
+      content: "";
+      position: absolute;
+      top: 26px;
+      bottom: -6px;
+      left: 50%;
+      width: 1px;
+      background: var(--app-border);
+      transform: translateX(-50%);
+    }
+
+    .thought-item:last-child .node-column::after { display: none; }
+
+    .node {
+      display: grid;
+      width: 18px;
+      height: 18px;
+      place-items: center;
+      border: 1px solid var(--app-border);
+      border-color: color-mix(in srgb, var(--item-accent) 62%, var(--app-bg));
+      border-radius: 50%;
+      background: var(--app-bg);
+      color: var(--item-accent);
+      font-family: var(--app-mono);
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .thought-item.branch .node { border-style: dashed; }
+    .thought-item.revision .node { border-width: 2px; }
+
+    .thought-item.current .node {
+      border-color: var(--item-accent);
+      background: var(--item-accent);
+      color: var(--app-bg);
+    }
+
+    /* Collapsed rows are plain lines; only the expanded row gets a panel. */
+    .thought-panel {
+      overflow: hidden;
+      border: 1px solid transparent;
+      border-radius: var(--app-radius-sm);
+      background: transparent;
+    }
+
+    .thought-item.expanded .thought-panel {
+      border-color: var(--app-border);
+      background: var(--app-bg-soft);
+    }
+
+    .thought-toggle {
+      display: grid;
+      width: 100%;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 9px;
+      border: 0;
+      border-radius: var(--app-radius-sm);
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .thought-toggle:hover {
+      background: color-mix(in oklab, var(--app-text) 5%, transparent);
+    }
+
+    .thought-heading {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .thought-label {
+      flex: 0 0 auto;
+      color: var(--app-text-soft);
+      font-size: 11px;
+      font-weight: var(--font-weight-semibold, 600);
+    }
+
+    .thought-badge {
+      flex: 0 0 auto;
+      overflow: hidden;
+      max-width: 170px;
+      padding: 1px 6px;
+      border: 1px solid var(--app-border);
+      border-color: color-mix(in srgb, var(--item-accent) 40%, transparent);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--app-text-soft);
+      font-size: 10px;
+      font-weight: var(--font-weight-semibold, 600);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .thought-preview {
+      min-width: 0;
+      overflow: hidden;
+      flex: 1;
+      color: var(--app-text-faint);
+      font-size: 12px;
+      font-weight: 400;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .thought-item.expanded .thought-preview { display: none; }
+
+    .chevron {
+      width: 14px;
+      height: 14px;
+      color: var(--app-text-faint);
+      transition: transform 160ms ease;
+    }
+
+    .thought-item.expanded .chevron { transform: rotate(180deg); }
+
+    .thought-text {
+      margin: 0;
+      max-width: 68ch;
+      padding: 0 9px 10px;
+      color: var(--app-text);
+      font-size: 14px;
+      line-height: 1.62;
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
+    }
+
+    .thought-item:not(.expanded) .thought-text { display: none; }
+
+    .thought-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 9px;
+      padding: 0 9px 8px;
+      color: var(--app-text-soft);
+      font-size: 11px;
+    }
+
+    .thought-meta:empty { display: none; }
+    .thought-item:not(.expanded) .thought-meta { display: none; }
+
+    @media (max-width: 440px) {
+      .quiet-button .button-label { display: none; }
+      .thought-badge { max-width: 110px; }
+    }
+
+    @media (forced-colors: active) {
+      .card, .card.boxed { border: 1px solid CanvasText; }
+      .node, .thought-badge { border: 1px solid CanvasText; }
+      .thought-item.expanded .thought-panel { border: 1px solid CanvasText; }
+      .thought-item.current .node {
+        background: Highlight;
+        color: HighlightText;
+        forced-color-adjust: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main id="card" class="card" aria-busy="true">
+    <header class="card-header">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8.3 18.4c-2.2-.9-3.8-3-3.8-5.5 0-2.1 1.1-3.9 2.8-5a5.3 5.3 0 0 1 9.5 1.5 4.8 4.8 0 0 1 2.7 4.3c0 2.7-2.2 4.9-4.9 4.9H8.3Z"/>
+          <path d="M9.2 9.7h5.6M9.2 13h5.6"/>
+        </svg>
+      </div>
+      <h1><span class="sr-only">Sequential thinking — </span><span id="position">Preparing this thought…</span></h1>
+      <span id="status" class="status" hidden>
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="status-text"></span>
+      </span>
+    </header>
+
+    <div id="progress-track" class="progress-track" aria-hidden="true"><span id="progress" class="progress-bar"></span></div>
+
+    <div id="notice" class="notice" hidden></div>
+
+    <section id="thought-view" class="thought-view" aria-label="Current thought" aria-live="polite">
+      <p id="solo-text" class="solo-text waiting">Waiting for the thought to arrive…</p>
+      <div id="solo-meta" class="solo-meta"></div>
+    </section>
+
+    <section id="journey" class="journey" hidden aria-label="Complete thought process">
+      <button id="journey-toggle" class="journey-toggle" type="button" aria-expanded="false" aria-controls="journey-body">
+        <span id="journey-caption" class="journey-caption">Complete process</span>
+        <svg class="drawer-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+      </button>
+      <div id="journey-body" class="journey-body" hidden>
+        <div class="journey-tools">
+          <button id="expand" class="quiet-button" type="button" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+            <span class="button-label">Expand all</span>
+          </button>
+        </div>
+        <ol id="timeline" class="timeline"></ol>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      // One card per tool call: this document renders only its own thought.
+      // The final thought's card (nextThoughtNeeded === false) additionally
+      // loads the stored history once and offers it as a collapsed drawer.
+      const APP_PROTOCOL_VERSION = "2026-01-26";
+      const APP_VERSION = "3.2.0";
+      const HISTORY_TOOL = "get_thought_history";
+      const MAIN_BRANCH = "main";
+      const MAX_HISTORY_PAGES = 50;
+      const parentWindow = window.parent;
+
+      const els = {
+        card: document.getElementById("card"),
+        position: document.getElementById("position"),
+        status: document.getElementById("status"),
+        statusText: document.getElementById("status-text"),
+        progressTrack: document.getElementById("progress-track"),
+        progress: document.getElementById("progress"),
+        notice: document.getElementById("notice"),
+        thoughtView: document.getElementById("thought-view"),
+        soloText: document.getElementById("solo-text"),
+        soloMeta: document.getElementById("solo-meta"),
+        journey: document.getElementById("journey"),
+        journeyToggle: document.getElementById("journey-toggle"),
+        journeyCaption: document.getElementById("journey-caption"),
+        journeyBody: document.getElementById("journey-body"),
+        expand: document.getElementById("expand"),
+        timeline: document.getElementById("timeline")
+      };
+
+      const state = {
+        initialized: false,
+        hostCapabilities: {},
+        hostContext: {},
+        input: {},
+        result: null,
+        toolError: "",
+        sequence: null,
+        thoughts: [],
+        journeyRequested: false,
+        journeyLoading: false,
+        journeyNote: "",
+        journeyOpen: false,
+        expandAll: false,
+        expanded: new Set()
+      };
+
+      let nextRequestId = 1;
+      const pending = new Map();
+      let resizeFrame = 0;
+
+      function isObject(value) {
+        return typeof value === "object" && value !== null && !Array.isArray(value);
+      }
+
+      function numberOr(value, fallback) {
+        return Number.isFinite(Number(value)) ? Number(value) : fallback;
+      }
+
+      function boolOr(value, fallback) {
+        if (value === true || value === "true") return true;
+        if (value === false || value === "false") return false;
+        return fallback;
+      }
+
+      function post(message) {
+        parentWindow.postMessage(message, "*");
+      }
+
+      function notify(method, params = {}) {
+        post({ jsonrpc: "2.0", method, params });
+      }
+
+      function request(method, params, timeoutMs = 15000) {
+        const id = nextRequestId++;
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            pending.delete(id);
+            reject(new Error(`${method} timed out`));
+          }, timeoutMs);
+          pending.set(id, { resolve, reject, timer });
+          post({ jsonrpc: "2.0", id, method, params });
+        });
+      }
+
+      function reply(id, result) {
+        post({ jsonrpc: "2.0", id, result });
+      }
+
+      function replyError(id, code, message) {
+        post({ jsonrpc: "2.0", id, error: { code, message } });
+      }
+
+      function resultData(result) {
+        if (isObject(result && result.structuredContent)) return result.structuredContent;
+        const textBlock = Array.isArray(result && result.content)
+          ? result.content.find((entry) => entry && entry.type === "text" && typeof entry.text === "string")
+          : null;
+        if (!textBlock) return null;
+        try {
+          const parsed = JSON.parse(textBlock.text);
+          return isObject(parsed) ? parsed : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function resultErrorText(result) {
+        const textBlock = Array.isArray(result && result.content)
+          ? result.content.find((entry) => entry && entry.type === "text" && typeof entry.text === "string")
+          : null;
+        return textBlock ? textBlock.text : "The tool call failed.";
+      }
+
+      function applyHostContext(update) {
+        if (!isObject(update)) return;
+        state.hostContext = { ...state.hostContext, ...update };
+        const context = state.hostContext;
+
+        if (context.theme === "light" || context.theme === "dark") {
+          document.documentElement.dataset.theme = context.theme;
+        }
+
+        const variables = context.styles && context.styles.variables;
+        if (isObject(variables)) {
+          for (const [name, value] of Object.entries(variables)) {
+            if (name.startsWith("--") && typeof value === "string") {
+              document.documentElement.style.setProperty(name, value);
+            }
+          }
+        }
+
+        const fonts = context.styles && context.styles.css && context.styles.css.fonts;
+        if (typeof fonts === "string" && fonts.length > 0) {
+          let style = document.getElementById("host-fonts");
+          if (!style) {
+            style = document.createElement("style");
+            style.id = "host-fonts";
+            document.head.appendChild(style);
+          }
+          style.textContent = fonts;
+        }
+
+        const safe = context.safeAreaInsets;
+        if (isObject(safe)) {
+          document.documentElement.style.setProperty("--safe-top", `${numberOr(safe.top, 0)}px`);
+          document.documentElement.style.setProperty("--safe-right", `${numberOr(safe.right, 0)}px`);
+          document.documentElement.style.setProperty("--safe-bottom", `${numberOr(safe.bottom, 0)}px`);
+          document.documentElement.style.setProperty("--safe-left", `${numberOr(safe.left, 0)}px`);
+        }
+      }
+
+      function scheduleSizeReport() {
+        if (!state.initialized || resizeFrame) return;
+        resizeFrame = requestAnimationFrame(() => {
+          resizeFrame = 0;
+          const root = document.documentElement;
+          const body = document.body;
+          notify("ui/notifications/size-changed", {
+            width: Math.ceil(Math.max(root.scrollWidth, body.scrollWidth)),
+            height: Math.ceil(Math.max(root.scrollHeight, body.scrollHeight))
+          });
+        });
+      }
+
+      function normalizeThought(raw, fallbackOrdinal) {
+        const thoughtNumber = Math.max(1, Math.trunc(numberOr(raw && raw.thoughtNumber, fallbackOrdinal + 1)));
+        return {
+          ordinal: Math.max(1, Math.trunc(numberOr(raw && raw.ordinal, fallbackOrdinal + 1))),
+          thought: typeof (raw && raw.thought) === "string" ? raw.thought : "",
+          thoughtNumber,
+          totalThoughts: Math.max(thoughtNumber, Math.trunc(numberOr(raw && raw.totalThoughts, thoughtNumber))),
+          nextThoughtNeeded: boolOr(raw && raw.nextThoughtNeeded, false),
+          isRevision: boolOr(raw && raw.isRevision, false),
+          revisesThought: raw && raw.revisesThought != null ? numberOr(raw.revisesThought, null) : null,
+          branchFromThought: raw && raw.branchFromThought != null ? numberOr(raw.branchFromThought, null) : null,
+          branchId: typeof (raw && raw.branchId) === "string" && raw.branchId ? raw.branchId : MAIN_BRANCH,
+          needsMoreThoughts: boolOr(raw && raw.needsMoreThoughts, false)
+        };
+      }
+
+      function thoughtKey(thought, index) {
+        return `${thought.ordinal}-${thought.thoughtNumber}-${thought.branchId}-${index}`;
+      }
+
+      function ownThought() {
+        if (typeof state.input.thought !== "string" || state.input.thought.length === 0) return null;
+        return normalizeThought(
+          {
+            ordinal: state.result && state.result.thoughtHistoryLength,
+            thought: state.input.thought,
+            thoughtNumber: state.input.thoughtNumber,
+            totalThoughts: state.input.totalThoughts,
+            // Partial tool input may not carry this field yet; a missing
+            // value must read as "still thinking", never as complete.
+            nextThoughtNeeded: state.input.nextThoughtNeeded === undefined
+              ? true
+              : state.input.nextThoughtNeeded,
+            isRevision: state.input.isRevision,
+            revisesThought: state.input.revisesThought,
+            branchFromThought: state.input.branchFromThought,
+            branchId: state.input.branchId,
+            needsMoreThoughts: state.input.needsMoreThoughts
+          },
+          0
+        );
+      }
+
+      function isFinalThought() {
+        const thought = ownThought();
+        return thought !== null && !thought.nextThoughtNeeded;
+      }
+
+      function thoughtLabel(thought) {
+        const position = `${thought.thoughtNumber} of ${Math.max(thought.thoughtNumber, thought.totalThoughts)}`;
+        if (thought.isRevision) {
+          return thought.revisesThought === null
+            ? `Revision · thought ${position}`
+            : `Revision of thought ${thought.revisesThought} · ${position}`;
+        }
+        if (thought.branchId !== MAIN_BRANCH) {
+          return `Branch ${thought.branchId} · thought ${position}`;
+        }
+        return `Thought ${position}`;
+      }
+
+      function metaBits(thought) {
+        const bits = [];
+        if (thought.isRevision && thought.revisesThought !== null) {
+          bits.push(`revises thought ${thought.revisesThought}`);
+        }
+        if (thought.branchFromThought !== null) {
+          bits.push(`branches from thought ${thought.branchFromThought}`);
+        }
+        if (thought.branchId !== MAIN_BRANCH) {
+          bits.push(`branch ${thought.branchId}`);
+        }
+        if (thought.needsMoreThoughts) {
+          bits.push("may extend beyond the estimate");
+        }
+        return bits;
+      }
+
+      function setNotice(message, kind = "warning") {
+        if (!message) {
+          els.notice.hidden = true;
+          els.notice.textContent = "";
+          els.notice.className = "notice";
+          return;
+        }
+        els.notice.hidden = false;
+        els.notice.textContent = message;
+        els.notice.className = kind === "error" ? "notice error" : "notice";
+      }
+
+      function renderTimeline() {
+        els.timeline.replaceChildren();
+        const currentOrdinal = state.thoughts.reduce(
+          (max, thought) => Math.max(max, thought.ordinal),
+          0
+        );
+
+        state.thoughts.forEach((thought, index) => {
+          const key = thoughtKey(thought, index);
+          const isCurrent = thought.ordinal === currentOrdinal;
+          const expanded = state.expandAll || state.expanded.has(key);
+
+          const item = document.createElement("li");
+          item.className = [
+            "thought-item",
+            thought.branchId !== MAIN_BRANCH ? "branch" : "",
+            thought.isRevision ? "revision" : "",
+            isCurrent ? "current" : "",
+            expanded ? "expanded" : ""
+          ].filter(Boolean).join(" ");
+
+          const nodeColumn = document.createElement("div");
+          nodeColumn.className = "node-column";
+          const node = document.createElement("span");
+          node.className = "node";
+          node.textContent = String(thought.thoughtNumber);
+          nodeColumn.appendChild(node);
+
+          const panel = document.createElement("div");
+          panel.className = "thought-panel";
+
+          const toggle = document.createElement("button");
+          toggle.className = "thought-toggle";
+          toggle.type = "button";
+          toggle.dataset.key = key;
+          toggle.setAttribute("aria-expanded", String(expanded));
+
+          const heading = document.createElement("span");
+          heading.className = "thought-heading";
+          const label = document.createElement("span");
+          label.className = "thought-label";
+          label.textContent = thought.isRevision
+            ? "Revision"
+            : thought.branchId !== MAIN_BRANCH
+              ? "Branch"
+              : `Thought ${thought.thoughtNumber}`;
+          heading.appendChild(label);
+
+          if (thought.isRevision || thought.branchId !== MAIN_BRANCH) {
+            const badge = document.createElement("span");
+            badge.className = "thought-badge";
+            badge.textContent = thought.isRevision
+              ? `of #${thought.revisesThought ?? "?"}`
+              : thought.branchId;
+            heading.appendChild(badge);
+          } else if (isCurrent) {
+            const badge = document.createElement("span");
+            badge.className = "thought-badge";
+            badge.textContent = "final";
+            heading.appendChild(badge);
+          }
+
+          const preview = document.createElement("span");
+          preview.className = "thought-preview";
+          const flat = (thought.thought || "").replace(/\s+/gu, " ").trim();
+          preview.textContent = flat.length > 240 ? `${flat.slice(0, 240)}…` : flat;
+          heading.appendChild(preview);
+
+          const chevron = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          chevron.setAttribute("class", "chevron");
+          chevron.setAttribute("viewBox", "0 0 24 24");
+          chevron.setAttribute("fill", "none");
+          chevron.setAttribute("stroke", "currentColor");
+          chevron.setAttribute("stroke-width", "1.8");
+          chevron.setAttribute("aria-hidden", "true");
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          path.setAttribute("d", "m7 10 5 5 5-5");
+          chevron.appendChild(path);
+
+          toggle.append(heading, chevron);
+
+          const text = document.createElement("p");
+          text.className = "thought-text";
+          text.textContent = thought.thought || "No thought text was returned.";
+
+          const meta = document.createElement("div");
+          meta.className = "thought-meta";
+          for (const bit of metaBits(thought)) {
+            const span = document.createElement("span");
+            span.textContent = bit;
+            meta.appendChild(span);
+          }
+
+          panel.append(toggle, text, meta);
+          item.append(nodeColumn, panel);
+          els.timeline.appendChild(item);
+        });
+      }
+
+      function renderStatus(thought, isFinal) {
+        const awaitingOwnResult = !state.result && !state.toolError;
+        if (state.toolError) {
+          els.status.hidden = false;
+          els.status.className = "status error";
+          els.statusText.className = "";
+          els.statusText.textContent = "Error";
+        } else if (awaitingOwnResult) {
+          els.status.hidden = false;
+          els.status.className = "status bare";
+          els.statusText.className = "sr-only";
+          els.statusText.textContent = "Thinking";
+        } else if (isFinal) {
+          els.status.hidden = false;
+          els.status.className = "status done";
+          els.statusText.className = "";
+          els.statusText.textContent = "✓";
+          els.status.setAttribute("aria-label", "Complete");
+        } else {
+          // Settled intermediate card: the title already carries the position.
+          els.status.hidden = true;
+        }
+        if (!isFinal || state.toolError) els.status.removeAttribute("aria-label");
+      }
+
+      function render() {
+        const thought = ownThought();
+        const isFinal = Boolean(thought && !thought.nextThoughtNeeded);
+        const haveJourney = state.thoughts.length > 1;
+
+        els.position.textContent = thought ? thoughtLabel(thought) : "Preparing this thought…";
+        els.card.classList.toggle("boxed", isFinal || Boolean(state.toolError));
+
+        if (thought) {
+          els.soloText.textContent = thought.thought;
+          els.soloText.className = "solo-text";
+          els.soloMeta.replaceChildren();
+          for (const bit of metaBits(thought)) {
+            const span = document.createElement("span");
+            span.textContent = bit;
+            els.soloMeta.appendChild(span);
+          }
+        } else {
+          els.soloText.textContent = "Waiting for the thought to arrive…";
+          els.soloText.className = "solo-text waiting";
+          els.soloMeta.replaceChildren();
+        }
+
+        if (!thought || isFinal) {
+          els.progressTrack.hidden = true;
+        } else {
+          els.progressTrack.hidden = false;
+          const total = Math.max(thought.thoughtNumber, thought.totalThoughts);
+          els.progress.style.width = `${Math.min(100, Math.max(0, (thought.thoughtNumber / total) * 100))}%`;
+        }
+
+        renderStatus(thought, isFinal);
+
+        els.journey.hidden = !(haveJourney || state.journeyLoading);
+        if (haveJourney || state.journeyLoading) {
+          els.journeyToggle.disabled = state.journeyLoading;
+          els.journeyToggle.setAttribute("aria-expanded", String(state.journeyOpen && haveJourney));
+          if (state.journeyLoading) {
+            els.journeyCaption.textContent = "Loading the full process…";
+          } else {
+            const count = state.thoughts.length;
+            const title = state.sequence && typeof state.sequence.title === "string"
+              ? state.sequence.title.trim()
+              : "";
+            els.journeyCaption.replaceChildren();
+            els.journeyCaption.append(title || "Complete process");
+            const sub = document.createElement("span");
+            sub.className = "caption-sub";
+            sub.textContent = ` · ${count} ${count === 1 ? "thought" : "thoughts"}`;
+            els.journeyCaption.appendChild(sub);
+          }
+          els.journeyBody.hidden = !(state.journeyOpen && haveJourney);
+          if (state.journeyOpen && haveJourney) {
+            els.expand.setAttribute("aria-pressed", String(state.expandAll));
+            els.expand.querySelector(".button-label").textContent = state.expandAll ? "Collapse all" : "Expand all";
+            renderTimeline();
+          }
+        }
+
+        if (state.toolError) {
+          setNotice(state.toolError, "error");
+        } else {
+          setNotice(state.journeyNote);
+        }
+
+        els.card.setAttribute("aria-busy", String(!thought || state.journeyLoading));
+        scheduleSizeReport();
+      }
+
+      function parseHistory(data) {
+        if (!isObject(data)) throw new Error("History returned an invalid response.");
+        const sequence = isObject(data.sequence) ? data.sequence : null;
+        const thoughts = Array.isArray(data.thoughts)
+          ? data.thoughts.map((entry, index) => normalizeThought(entry, index))
+          : [];
+        return {
+          sequence,
+          thoughts,
+          nextCursor: data.nextCursor == null ? null : numberOr(data.nextCursor, null)
+        };
+      }
+
+      async function requestHistoryPage(sequenceId, cursor) {
+        const result = await request("tools/call", {
+          name: HISTORY_TOOL,
+          arguments: {
+            sequenceId,
+            limit: 100,
+            order: "asc",
+            maxCharacters: 250000,
+            ...(cursor == null ? {} : { cursor })
+          }
+        }, 20000);
+        if (result && result.isError) throw new Error(resultErrorText(result));
+        return parseHistory(resultData(result));
+      }
+
+      // Loads the complete stored process exactly once, on the final card.
+      // The one-shot guard is set only after every precondition passes, so an
+      // early tool-result arriving before ui/initialize resolves does not
+      // permanently disable the journey — initialize() retries this call.
+      async function loadJourney() {
+        if (state.journeyRequested) return;
+
+        const sequenceId = state.result && typeof state.result.sequenceId === "string"
+          ? state.result.sequenceId
+          : typeof state.input.sequenceId === "string" ? state.input.sequenceId : "";
+        if (!sequenceId) return;
+        if (!state.initialized || !state.hostCapabilities.serverTools) return;
+        if (state.result && numberOr(state.result.thoughtHistoryLength, 0) <= 1) return;
+        state.journeyRequested = true;
+
+        state.journeyLoading = true;
+        render();
+
+        const collected = [];
+        try {
+          let cursor = null;
+          let pages = 0;
+          do {
+            const parsed = await requestHistoryPage(sequenceId, cursor);
+            if (parsed.sequence) state.sequence = parsed.sequence;
+            collected.push(...parsed.thoughts);
+            cursor = parsed.nextCursor;
+            pages += 1;
+          } while (cursor != null && pages < MAX_HISTORY_PAGES);
+          const sorted = collected.sort((left, right) => left.ordinal - right.ordinal);
+          // This card is a snapshot: if the sequence is reopened later, a
+          // remounted card must not absorb thoughts that came after it.
+          const snapshotCap = state.result
+            ? Math.trunc(numberOr(state.result.thoughtHistoryLength, 0))
+            : 0;
+          state.thoughts = snapshotCap > 0 ? sorted.slice(0, snapshotCap) : sorted;
+          if (cursor != null) {
+            state.journeyNote = `Showing the first ${state.thoughts.length} thoughts of a very large process.`;
+          }
+        } catch {
+          // The card still shows its own thought, but say why the rest is gone.
+          state.thoughts = [];
+          state.journeyNote = "The full process could not be loaded; this card shows only its own thought.";
+        } finally {
+          state.journeyLoading = false;
+          render();
+        }
+      }
+
+      function handleSequentialInput(args) {
+        if (!isObject(args) || typeof args.thought !== "string") return;
+        state.input = { ...args };
+        state.toolError = "";
+        render();
+      }
+
+      function handleSequentialResult(result) {
+        if (result && result.isError) {
+          state.toolError = resultErrorText(result);
+          render();
+          return;
+        }
+        const data = resultData(result);
+        if (isObject(data) && typeof data.sequenceId === "string") {
+          state.result = data;
+        }
+        render();
+        if (isFinalThought()) void loadJourney();
+      }
+
+      function handleMessage(event) {
+        if (event.source !== parentWindow) return;
+        const message = event.data;
+        if (!isObject(message) || message.jsonrpc !== "2.0") return;
+
+        if (Object.prototype.hasOwnProperty.call(message, "id") && ("result" in message || "error" in message) && !message.method) {
+          const entry = pending.get(message.id);
+          if (!entry) return;
+          pending.delete(message.id);
+          clearTimeout(entry.timer);
+          if (message.error) {
+            entry.reject(new Error(message.error.message || "Host request failed"));
+          } else {
+            entry.resolve(message.result);
+          }
+          return;
+        }
+
+        if (typeof message.method !== "string") return;
+
+        if (message.method === "ui/resource-teardown" && Object.prototype.hasOwnProperty.call(message, "id")) {
+          for (const entry of pending.values()) {
+            clearTimeout(entry.timer);
+            entry.reject(new Error("App was closed"));
+          }
+          pending.clear();
+          reply(message.id, {});
+          return;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(message, "id")) {
+          replyError(message.id, -32601, "Method not found");
+          return;
+        }
+
+        if (message.method === "ui/notifications/tool-input" || message.method === "ui/notifications/tool-input-partial") {
+          handleSequentialInput(message.params && message.params.arguments);
+        } else if (message.method === "ui/notifications/tool-result") {
+          handleSequentialResult(message.params);
+        } else if (message.method === "ui/notifications/tool-cancelled") {
+          state.toolError = (message.params && message.params.reason) || "The thought call was cancelled.";
+          render();
+        } else if (message.method === "ui/notifications/host-context-changed") {
+          applyHostContext(message.params);
+          render();
+        }
+      }
+
+      els.timeline.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-key]");
+        if (!button) return;
+        const key = button.dataset.key;
+        if (state.expanded.has(key)) state.expanded.delete(key);
+        else state.expanded.add(key);
+        render();
+        // renderTimeline() rebuilt the rows; put focus back on the toggled one.
+        const restored = els.timeline.querySelector(`button[data-key="${CSS.escape(key)}"]`);
+        if (restored) restored.focus();
+      });
+
+      els.expand.addEventListener("click", () => {
+        state.expandAll = !state.expandAll;
+        state.expanded.clear();
+        render();
+      });
+
+      els.journeyToggle.addEventListener("click", () => {
+        if (els.journeyToggle.disabled) return;
+        state.journeyOpen = !state.journeyOpen;
+        render();
+      });
+
+      window.addEventListener("message", handleMessage);
+      new ResizeObserver(scheduleSizeReport).observe(document.documentElement);
+
+      async function initialize() {
+        try {
+          const result = await request("ui/initialize", {
+            appInfo: { name: "Sequential Thinking Process", version: APP_VERSION },
+            appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] },
+            protocolVersion: APP_PROTOCOL_VERSION
+          });
+          if (isObject(result)) {
+            state.hostCapabilities = isObject(result.hostCapabilities) ? result.hostCapabilities : {};
+            applyHostContext(result.hostContext);
+          }
+          state.initialized = true;
+          notify("ui/notifications/initialized", {});
+          render();
+          if (isFinalThought() && state.result) void loadJourney();
+        } catch (error) {
+          state.toolError = error instanceof Error ? error.message : String(error);
+          state.initialized = false;
+          render();
+        }
+      }
+
+      render();
+      void initialize();
+    })();
+  </script>
+</body>
+</html>

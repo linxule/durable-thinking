@@ -1,0 +1,6 @@
+# Generate with: npm run secrets
+MCP_API_TOKEN=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+# Comma-separated GitHub logins. Empty fails closed.
+ALLOWED_GITHUB_LOGIN=

@@ -1,0 +1,13 @@
+This project adapts the behavior and public tool concept of the Model Context
+Protocol reference Sequential Thinking server:
+
+  https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking
+
+The reference Sequential Thinking server is licensed under the MIT License.
+This adaptation replaces process-local history with explicit sequence IDs and
+full-text SQLite-backed Cloudflare Durable Object storage while keeping MCP HTTP
+request handling stateless.
+
+"Model Context Protocol", Cloudflare, and related project names remain the
+property of their respective owners. This repository is not an official MCP or
+Cloudflare project.

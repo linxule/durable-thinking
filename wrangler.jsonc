@@ -1,0 +1,53 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sequential-thinking-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "rules": [
+    {
+      "type": "Text",
+      "globs": [
+        "**/*.html"
+      ],
+      "fallthrough": true
+    }
+  ],
+  "secrets": {
+    "required": [
+      "MCP_API_TOKEN",
+      "GITHUB_CLIENT_ID",
+      "GITHUB_CLIENT_SECRET"
+    ]
+  },
+  // ALLOWED_GITHUB_LOGIN is deliberately not declared as a var: set it as a
+  // per-deployment secret (npx wrangler secret put ALLOWED_GITHUB_LOGIN) so
+  // deploys never overwrite it. Absent or empty fails closed.
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      // Deploying your own copy? Run `npx wrangler kv namespace create OAUTH_KV`
+      // and replace this id with yours (namespace ids are not secrets).
+      "id": "39444c3105bd491fa62db7d9f8a0f6ce"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "THOUGHT_STORE",
+        "class_name": "ThoughtStore"
+      }
+    ]
+  },
+  "exports": {
+    "ThoughtStore": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "observability": {
+    "enabled": true
+  }
+}
