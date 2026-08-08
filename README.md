@@ -180,7 +180,7 @@ npm run deploy
 |---|---:|---|
 | `THOUGHT_RETENTION_DAYS` | `0` | `0` retains sequences until explicit deletion; a positive value enables sliding expiration. |
 | `ALLOWED_HOSTNAMES` | automatic | Optional comma-separated host allowlist, for custom domains. |
-| `ALLOWED_ORIGIN_HOSTNAMES` | automatic | Optional comma-separated browser-Origin hostname allowlist. |
+| `ALLOWED_ORIGIN_HOSTNAMES` | supported web clients and same-host | Optional comma-separated browser-Origin hostname allowlist; setting it replaces the default Claude and ChatGPT web origins. |
 
 There's deliberately no public mode, tenant selector, configurable storage id, thought-logging switch, or automatic recent-history return — one user, one hard-coded Durable Object name: `personal`. Rotating `MCP_API_TOKEN` or the OAuth credentials doesn't orphan history; storage identity is independent of both.
 
@@ -188,13 +188,15 @@ There's deliberately no public mode, tenant selector, configurable storage id, t
 
 Two doors, one server.
 
-**Browser sign-in** — for clients that can't send custom headers (claude.ai web, Claude Desktop connectors). Add a custom connector pointing at:
+**Browser sign-in** — for hosted clients that can't send custom headers, including Claude and ChatGPT. Add a custom connector or MCP app pointing at the complete compatibility URL:
 
 ```text
-https://<worker-host>/mcp
+https://<worker-host>/mcp-compat
 ```
 
-The client discovers the OAuth endpoints, registers itself, and opens a consent page; continue to GitHub, and if your login is on the allowlist, you're in.
+Keep the `/mcp-compat` path: it is part of the protected resource identifier, not an interchangeable routing detail. The compatibility endpoint supports the 2025-era Streamable HTTP protocol used by current hosted clients. The host discovers the OAuth endpoints, dynamically registers its own callback, and opens the Durable Thinking consent page. Continue to GitHub; if your login is on the allowlist, the host receives its own Durable Thinking access and refresh tokens.
+
+The GitHub OAuth App still uses `https://<worker-host>/callback`, as configured during deployment. That is the Worker's upstream GitHub callback; it is separate from the redirect URI that Claude or ChatGPT registers with the Worker.
 
 **Bearer header** — for CLIs and anything header-capable:
 
@@ -204,7 +206,19 @@ Authorization: Bearer <MCP_API_TOKEN>
 
 An exact token match routes straight to the MCP handler; the OAuth machinery never sees it.
 
-Either way, use `/mcp` for MCP 2026-07-28 clients and `/mcp-compat` for 2025-era Streamable HTTP clients.
+Use `/mcp` only for clients that explicitly support MCP 2026-07-28. Use `/mcp-compat` for current hosted web clients and other 2025-era Streamable HTTP clients.
+
+### OAuth troubleshooting
+
+The browser consent step does not depend on third-party cookies. If connection fails, check the protocol surfaces in order:
+
+1. `POST /mcp-compat` without credentials must return `401` and a `WWW-Authenticate` header whose `resource_metadata` URL ends in `/oauth-protected-resource/mcp-compat`.
+2. That metadata document's `resource` value must exactly equal `https://<worker-host>/mcp-compat`.
+3. `/.well-known/oauth-authorization-server` must advertise `/authorize`, `/token`, `/register`, and S256 PKCE support.
+4. If `ALLOWED_ORIGIN_HOSTNAMES` is set, include the hosted client's hostname. Leaving it unset permits the server's own host plus the supported Claude and ChatGPT web origins; unrelated origins remain rejected.
+5. The consent page's CSP must allow `form-action 'self' https://github.com`. Earlier deployments allowed only `'self'`, so Chrome accepted the form POST but blocked its redirect to GitHub.
+
+Worker logs use fixed stage and reason fields without recording authorization codes, state values, access tokens, client secrets, or thought text.
 
 ## Retention and privacy
 

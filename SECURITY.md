@@ -9,6 +9,12 @@ configured `MCP_API_TOKEN`. OAuth authorization fails closed unless the GitHub
 login is present in `ALLOWED_GITHUB_LOGIN`. Authentication cannot be disabled
 through the default code or configuration.
 
+Consent and callback state is short-lived and HMAC-authenticated rather than
+stored as cross-request browser state. The consent page permits form navigation
+only to the Worker itself and GitHub. OAuth diagnostics record fixed stage and
+reason fields but never authorization codes, state payloads, access tokens,
+client secrets, or request authorization headers.
+
 All histories live in one Durable Object named `personal`. Rotating the bearer
 token or OAuth credentials does not select a different store.
 

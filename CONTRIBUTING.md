@@ -19,5 +19,7 @@ Preserve these design invariants:
 8. Every operation uses the fixed authenticated personal storage principal.
 9. Thought text is never written to Worker logs.
 10. Storage, schema, or pagination changes include tests for existing records, branches, revisions, retention, and deletion.
+11. Each MCP route advertises path-specific protected-resource metadata whose `resource` exactly matches the client-entered URL.
+12. OAuth logs contain only fixed stage and reason metadata, never credentials, authorization codes, state payloads, or tokens.
 
 Do not commit generated secrets, `.dev.vars`, `node_modules`, build output, or private MCP client configuration.

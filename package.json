@@ -1,6 +1,6 @@
 {
   "name": "durable-thinking",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Persistent Sequential Thinking MCP 2026-07-28 server with per-thought MCP App cards, on Cloudflare Workers and Durable Objects",
   "private": true,
   "repository": "github:linxule/durable-thinking",

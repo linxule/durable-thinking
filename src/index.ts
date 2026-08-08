@@ -29,6 +29,19 @@ const CORS_HEADERS = {
   "Access-Control-Max-Age": "86400"
 } as const;
 
+// Browser-hosted MCP clients send an Origin header from their own application
+// domain. Keep the default narrow while allowing the two supported web hosts;
+// operators can still replace it entirely with ALLOWED_ORIGIN_HOSTNAMES.
+const HOSTED_MCP_CLIENT_ORIGINS = [
+  "claude.ai",
+  "www.claude.ai",
+  "claude.com",
+  "www.claude.com",
+  "chatgpt.com",
+  "www.chatgpt.com",
+  "chat.openai.com"
+] as const;
+
 function json(body: unknown, status = 200, extraHeaders?: HeadersInit): Response {
   const headers = new Headers(extraHeaders);
   headers.set("Content-Type", "application/json; charset=utf-8");
@@ -84,7 +97,11 @@ function requestValidationResponse(request: Request, env: WorkerEnv): Response |
 
   const configuredOrigins = csv(env.ALLOWED_ORIGIN_HOSTNAMES);
   const allowedOrigins =
-    configuredOrigins ?? [...localhostAllowedOrigins(), url.hostname];
+    configuredOrigins ?? [
+      ...localhostAllowedOrigins(),
+      url.hostname,
+      ...HOSTED_MCP_CLIENT_ORIGINS
+    ];
   const originFailure = originValidationResponse(request, allowedOrigins);
   return originFailure ? withCorsAndSecurity(originFailure) : undefined;
 }
@@ -100,7 +117,7 @@ const publicHandler = {
     if (url.pathname === "/" && (request.method === "GET" || request.method === "HEAD")) {
       const body = {
         name: "Persistent Sequential Thinking MCP",
-        version: "3.1.0",
+        version: "3.1.1",
         protocol: "MCP 2026-07-28 stateless HTTP",
         persistence: "SQLite-backed Cloudflare Durable Object",
         continuity: "Explicit sequenceId tool argument — the unguessable ID is the capability that scopes a sequence to its conversation",
@@ -227,28 +244,78 @@ const oauthProvider = new OAuthProvider<WorkerEnv>({
     bearer_methods_supported: ["header"],
     resource_name: "Durable Thinking MCP"
   },
-  onError: () => undefined
+  onError({ status, code, internal }) {
+    // Keep diagnostics to protocol codes and the provider's structured reason
+    // tags. Never log descriptions, headers, or requests: those can carry
+    // attacker-controlled text or credentials.
+    console.error(
+      JSON.stringify({
+        event: "oauth_provider_error",
+        status,
+        code,
+        internalCategory: internal?.category,
+        internalReason: internal?.reason
+      })
+    );
+  }
 });
 
-function withCanonicalResourceMetadataChallenge(
-  request: Request,
-  response: Response
-): Response {
-  if (response.status !== 401) return response;
-  const challenge = response.headers.get("WWW-Authenticate");
-  if (!challenge) return response;
+const TOKEN_GRANT_PROPAGATION_RETRY_DELAYS_MS = [0, 200, 400, 800, 1600];
 
-  const resourceMetadata = `${new URL(request.url).origin}/.well-known/oauth-protected-resource`;
-  const headers = new Headers(response.headers);
-  headers.set(
-    "WWW-Authenticate",
-    challenge.replace(/resource_metadata="[^"]*"/u, `resource_metadata="${resourceMetadata}"`)
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isGrantPropagationDelay(body: unknown): boolean {
+  return (
+    isRecord(body) &&
+    body.error === "invalid_grant" &&
+    typeof body.error_description === "string" &&
+    body.error_description.startsWith("Grant not found")
   );
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers
-  });
+}
+
+// workers-oauth-provider 0.10.2 stores the authorization-code/refresh-token
+// grant in Workers KV and reads it back by key at /token — no retry, no
+// alternate consistency mode (the library's own draft storage-provider RFC,
+// cloudflare/workers-oauth-provider#237, documents that KV "explicitly
+// advertises eventual reads"; it is not merged/released). The grant is
+// written during /callback, which runs on a Cloudflare colo near the user's
+// browser; a hosted client's backend calls /token from its own infrastructure,
+// which commonly lands on a *different* colo. A `grantData == null` on
+// that read surfaces as `invalid_grant` / "Grant not found or authorization
+// code expired" (or, for refresh, "Grant not found") even though the grant
+// exists and nothing has been consumed yet — the same propagation-delay
+// failure mode that caused our own flow-state "state_not_found" bug (see
+// oauth.ts). Retrying is safe: the not-found path never mutates the grant,
+// so replaying the same request just gives KV replication time to catch up.
+async function fetchTokenEndpoint(
+  request: Request,
+  env: WorkerEnv,
+  ctx: ExecutionContext
+): Promise<Response> {
+  const bodyText = await request.text();
+  let response: Response | undefined;
+  for (const delay of TOKEN_GRANT_PROPAGATION_RETRY_DELAYS_MS) {
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    const attemptRequest = new Request(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: bodyText
+    });
+    response = await oauthProvider.fetch(attemptRequest, env, ctx);
+    if (response.status !== 400) return response;
+    let parsedBody: unknown;
+    try {
+      parsedBody = await response.clone().json();
+    } catch {
+      return response;
+    }
+    if (!isGrantPropagationDelay(parsedBody)) return response;
+    console.error(JSON.stringify({ event: "oauth_token_grant_propagation_retry", delay }));
+  }
+  console.error(JSON.stringify({ event: "oauth_token_grant_propagation_exhausted" }));
+  return response!;
 }
 
 export default {
@@ -273,9 +340,8 @@ export default {
       return publicHandler.fetch(request, env, ctx);
     }
 
-    const response = await oauthProvider.fetch(request, env, ctx);
-    return isMcpRequest
-      ? withCanonicalResourceMetadataChallenge(request, response)
-      : response;
+    return pathname === "/token" && request.method === "POST"
+      ? fetchTokenEndpoint(request, env, ctx)
+      : oauthProvider.fetch(request, env, ctx);
   }
 } satisfies ExportedHandler<WorkerEnv>;

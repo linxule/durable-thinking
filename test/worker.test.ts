@@ -7,15 +7,19 @@ import worker from "../src/index";
 const workerEnv = env as unknown as WorkerEnv;
 const token = "test-token-0123456789abcdef0123456789abcdef";
 
-async function fetch(request: Request): Promise<Response> {
+async function fetchWithEnv(request: Request, requestEnv: WorkerEnv): Promise<Response> {
   // worker.fetch is called directly, so the Host header the Cloudflare edge
   // would normally set must be supplied explicitly for host validation.
   const headers = new Headers(request.headers);
   if (!headers.has("host")) headers.set("host", new URL(request.url).host);
   const ctx = createExecutionContext();
-  const response = await worker.fetch(new Request(request, { headers }), workerEnv, ctx);
+  const response = await worker.fetch(new Request(request, { headers }), requestEnv, ctx);
   await waitOnExecutionContext(ctx);
   return response;
+}
+
+async function fetch(request: Request): Promise<Response> {
+  return fetchWithEnv(request, workerEnv);
 }
 
 describe("Worker routes", () => {
@@ -91,6 +95,24 @@ describe("Worker routes", () => {
     expect(response.status).toBe(403);
   });
 
+  it.each(["https://claude.ai", "https://chatgpt.com"])(
+    "allows the supported hosted MCP client Origin %s by default",
+    async (origin) => {
+      const response = await fetchWithEnv(
+        new Request("https://example.com/mcp-compat", {
+          method: "OPTIONS",
+          headers: {
+            Origin: origin,
+            "Access-Control-Request-Method": "POST"
+          }
+        }),
+        { ...workerEnv, ALLOWED_ORIGIN_HOSTNAMES: undefined }
+      );
+
+      expect(response.status).toBe(204);
+    }
+  );
+
   it("rejects unauthenticated MCP requests", async () => {
     const response = await fetch(
       new Request("https://example.com/mcp", {
@@ -103,8 +125,65 @@ describe("Worker routes", () => {
     expect(response.status).toBe(401);
     expect(response.headers.get("WWW-Authenticate")).toContain("Bearer");
     expect(response.headers.get("WWW-Authenticate")).toContain(
-      'resource_metadata="https://example.com/.well-known/oauth-protected-resource"'
+      'resource_metadata="https://example.com/.well-known/oauth-protected-resource/mcp"'
     );
+  });
+
+  it("advertises path-specific OAuth metadata for the compatibility endpoint", async () => {
+    const response = await fetch(
+      new Request("https://example.com/mcp-compat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} })
+      })
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("WWW-Authenticate")).toContain(
+      'resource_metadata="https://example.com/.well-known/oauth-protected-resource/mcp-compat"'
+    );
+
+    const metadata = await fetch(
+      new Request("https://example.com/.well-known/oauth-protected-resource/mcp-compat")
+    );
+    const body = (await metadata.json()) as { resource?: string };
+    expect(metadata.status).toBe(200);
+    expect(body.resource).toBe("https://example.com/mcp-compat");
+  });
+
+  it("permits the consent form's same-origin POST to redirect to GitHub", async () => {
+    const registration = await fetch(
+      new Request("https://example.com/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_name: "Hosted MCP test client",
+          redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+          token_endpoint_auth_method: "none",
+          grant_types: ["authorization_code", "refresh_token"],
+          response_types: ["code"]
+        })
+      })
+    );
+    expect(registration.status).toBe(201);
+    const client = (await registration.json()) as { client_id?: string };
+    expect(client.client_id).toBeTruthy();
+
+    const authorize = new URL("https://example.com/authorize");
+    authorize.searchParams.set("response_type", "code");
+    authorize.searchParams.set("client_id", client.client_id!);
+    authorize.searchParams.set("redirect_uri", "https://claude.ai/api/mcp/auth_callback");
+    authorize.searchParams.set("code_challenge", "A".repeat(43));
+    authorize.searchParams.set("code_challenge_method", "S256");
+    authorize.searchParams.set("state", "test-state");
+    authorize.searchParams.set("resource", "https://example.com/mcp-compat");
+
+    const response = await fetch(new Request(authorize));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Security-Policy")).toContain(
+      "form-action 'self' https://github.com"
+    );
+    expect(await response.text()).toContain("Continue with GitHub");
   });
 
   it("keeps the static bearer fast path working", async () => {
@@ -139,7 +218,7 @@ describe("Worker routes", () => {
     const body = JSON.parse(dataLine!.slice("data:".length)) as {
       result?: { serverInfo?: { version?: string } };
     };
-    expect(body.result?.serverInfo?.version).toBe("3.1.0");
+    expect(body.result?.serverInfo?.version).toBe("3.1.1");
   });
 
   it("serves OAuth protected-resource metadata", async () => {
