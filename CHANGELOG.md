@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.1.2 — 2026-08-08
+
+Distribution metadata release.
+
+- Add an official MCP Registry manifest for deploy-your-own remote Workers.
+- Publish Registry metadata from GitHub Releases with secretless GitHub OIDC authentication.
+- Pin and checksum the Registry publisher instead of executing an unversioned download.
+- Keep npm publication disabled because Durable Thinking does not ship a local stdio executable.
+
 ## 3.1.1 — 2026-08-08
 
 OAuth reliability release for hosted MCP clients.

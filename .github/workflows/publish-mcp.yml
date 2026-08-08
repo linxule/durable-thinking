@@ -1,0 +1,70 @@
+name: Publish MCP Registry
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the released revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify release
+        run: npm run verify
+
+      - name: Guard release tag and manifest versions
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          PACKAGE_TAG="v$(node -p "require('./package.json').version")"
+          MANIFEST_TAG="v$(node -p "require('./server.json').version")"
+          test "$RELEASE_TAG" = "$PACKAGE_TAG"
+          test "$RELEASE_TAG" = "$MANIFEST_TAG"
+
+      - name: Install pinned MCP publisher
+        env:
+          PUBLISHER_VERSION: v1.7.9
+          PUBLISHER_SHA256: ab128162b0616090b47cf245afe0a23f3ef08936fdce19074f5ba0a4469281ac
+        run: |
+          ARCHIVE="mcp-publisher_linux_amd64.tar.gz"
+          curl --fail --location --silent --show-error \
+            --output "$ARCHIVE" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/${PUBLISHER_VERSION}/${ARCHIVE}"
+          echo "${PUBLISHER_SHA256}  ${ARCHIVE}" | sha256sum --check --strict
+          tar --extract --gzip --file "$ARCHIVE" mcp-publisher
+          ./mcp-publisher --version
+
+      - name: Authenticate with GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish remote server metadata
+        run: ./mcp-publisher publish server.json
+
+      - name: Verify the published Registry version
+        run: |
+          SERVER_NAME=$(node -p "require('./server.json').name")
+          SERVER_VERSION=$(node -p "require('./server.json').version")
+          ENCODED_NAME=$(node -p "encodeURIComponent(process.argv[1])" "$SERVER_NAME")
+          curl --fail --silent --show-error \
+            "https://registry.modelcontextprotocol.io/v0.1/servers/${ENCODED_NAME}/versions/${SERVER_VERSION}" \
+            | jq --exit-status --arg name "$SERVER_NAME" --arg version "$SERVER_VERSION" \
+              '.server.name == $name and .server.version == $version'

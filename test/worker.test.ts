@@ -218,7 +218,7 @@ describe("Worker routes", () => {
     const body = JSON.parse(dataLine!.slice("data:".length)) as {
       result?: { serverInfo?: { version?: string } };
     };
-    expect(body.result?.serverInfo?.version).toBe("3.1.1");
+    expect(body.result?.serverInfo?.version).toBe("3.1.2");
   });
 
   it("serves OAuth protected-resource metadata", async () => {

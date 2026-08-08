@@ -1,6 +1,6 @@
 {
   "name": "durable-thinking",
-  "version": "3.1.1",
+  "version": "3.1.2",
   "description": "Persistent Sequential Thinking MCP 2026-07-28 server with per-thought MCP App cards, on Cloudflare Workers and Durable Objects",
   "private": true,
   "repository": "github:linxule/durable-thinking",
@@ -15,10 +15,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
     "test": "vitest run",
     "check:app": "node scripts/check-mcp-app.mjs",
-    "check": "npm run check:app && npm run check:contract && npm run typecheck && npm run test",
+    "check": "npm run check:app && npm run check:contract && npm run check:registry && npm run typecheck && npm run test",
     "verify": "npm run check && npm run build",
     "secrets": "node scripts/generate-secrets.mjs",
-    "check:contract": "node scripts/check-server-contract.mjs"
+    "check:contract": "node scripts/check-server-contract.mjs",
+    "check:registry": "node scripts/check-registry-manifest.mjs"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "0.10.2",

@@ -145,6 +145,14 @@ Set these under **Settings → Secrets and variables → Actions**:
 
 These authorize deployment and are separate from the runtime secrets above.
 
+### Registry publication
+
+GitHub Releases publish Durable Thinking metadata to the official MCP Registry through `.github/workflows/publish-mcp.yml`. The job uses GitHub OIDC, so it needs `id-token: write` but no long-lived Registry credential. `server.json` advertises a required `worker_host` variable and the complete `https://{worker_host}/mcp-compat` URL, reflecting the project's deploy-your-own model rather than directing strangers to one private deployment.
+
+This repository is deliberately not published to npm. Its `package.json` describes a Cloudflare application and has no `bin` or local stdio transport; an npm artifact would not give clients an installable MCP server. If a supported local runtime is added later, npm Trusted Publishing can be introduced then, with a real executable, package ownership metadata, and provenance.
+
+Smithery URL publication is also separate from the release workflow. Smithery expects one concrete upstream URL, while each Durable Thinking owner deploys a private Worker with a GitHub allowlist. Add Smithery only if the service gains a multi-user hosted access model or Smithery supports the deploy-your-own URL template directly.
+
 ### By hand
 
 Requirements: Node.js 22+, a Cloudflare account with Workers and Durable Objects enabled, Wrangler authenticated.
@@ -237,6 +245,7 @@ CORS and MCP App visibility metadata are not authentication controls — keep th
 ```bash
 npm run check:app       # validates the self-contained MCP App and protocol surface
 npm run check:contract  # guards the compact tool and visibility contract
+npm run check:registry  # guards the official Registry manifest and version sync
 npm run typecheck       # Worker and test TypeScript projects
 npm run test            # Durable Object, auth, routes, and App invariants
 npm run build           # Wrangler dry run

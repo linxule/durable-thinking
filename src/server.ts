@@ -20,7 +20,7 @@ import thoughtProcessHtml from "./ui/thought-process.html";
 
 export const THOUGHT_APP_URI = "ui://sequential-thinking/process.html";
 export const MCP_APP_MIME_TYPE = "text/html;profile=mcp-app";
-const SERVER_VERSION = "3.1.1";
+const SERVER_VERSION = "3.1.2";
 
 const THOUGHT_TOOL_META = {
   ui: {
