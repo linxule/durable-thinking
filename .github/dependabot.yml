@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # The Workers test pool currently supports Vitest 4 only.
+    ignore:
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+    groups:
+      dependencies:
+        patterns: ["*"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
