@@ -23,3 +23,12 @@ Preserve these design invariants:
 12. OAuth logs contain only fixed stage and reason metadata, never credentials, authorization codes, state payloads, or tokens.
 
 Do not commit generated secrets, `.dev.vars`, `node_modules`, build output, or private MCP client configuration.
+
+## Dependency maintenance
+
+Weekly Dependabot PRs group npm and GitHub Actions updates. CI runs `npm audit`
+and the complete `npm run verify` gate against the committed npm lockfile.
+The Cloudflare test pool currently requires Vitest 4, so Vitest major updates
+are held until its peer range supports them. Miniflare's `sharp` dependency is
+overridden to patched 0.35.4 or newer for GHSA-rgj7-g3m4-5g8c; remove this
+override once both the test pool and Wrangler resolve patched Sharp themselves.
