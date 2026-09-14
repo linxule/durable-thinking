@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.3 — 2026-09-14
+
+Dependency security maintenance release.
+
+- Patch vulnerable development dependencies and refresh OAuth and validation packages.
+- Add grouped dependency updates and a required dependency audit in CI.
+- Preserve MCP tools, OAuth resource paths, app behavior, storage ownership and existing data.
+
 ## 3.1.2 — 2026-08-08
 
 Distribution metadata release.
