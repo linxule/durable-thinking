@@ -3,7 +3,7 @@
   "name": "io.github.linxule/durable-thinking",
   "title": "Durable Thinking",
   "description": "Self-hosted persistent sequential thinking with private history and MCP App visualization.",
-  "version": "3.1.2",
+  "version": "3.1.3",
   "repository": {
     "url": "https://github.com/linxule/durable-thinking",
     "source": "github",

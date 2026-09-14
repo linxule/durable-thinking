@@ -246,7 +246,7 @@ async function githubAccessToken(request: Request, env: WorkerEnv, code: string)
     headers: {
       Accept: "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "durable-thinking/3.1.2"
+      "User-Agent": "durable-thinking/3.1.3"
     },
     body: new URLSearchParams({
       client_id: env.GITHUB_CLIENT_ID!.trim(),
@@ -279,7 +279,7 @@ async function githubIdentity(accessToken: string): Promise<{ id: number; login:
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${accessToken}`,
-      "User-Agent": "durable-thinking/3.1.2",
+      "User-Agent": "durable-thinking/3.1.3",
       "X-GitHub-Api-Version": "2022-11-28"
     }
   });
