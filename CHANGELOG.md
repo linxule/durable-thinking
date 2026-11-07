@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.4 — 2026-11-07
+
+Dependency security maintenance release.
+
+- Update the MCP server SDK (`@modelcontextprotocol/server`) from 2.0.0 to 2.4.0 and Zod from 4.6.2 to 4.6.6 to resolve runtime security advisories.
+- Refresh development tooling (Vite, Vitest, Wrangler, `source-map-js`) within existing ranges.
+- Preserve MCP tools, OAuth resource paths, app behavior, storage ownership and existing data.
+
 ## 3.1.3 — 2026-09-14
 
 Dependency security maintenance release.
