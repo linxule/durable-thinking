@@ -1,4 +1,7 @@
-import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
+import {
+  type OAuthAuthorizationServer,
+  OAuthResourceServer
+} from "@cloudflare/workers-oauth-provider";
 import {
   createMcpHandler,
   hostHeaderValidationResponse,
@@ -17,6 +20,12 @@ import {
 import { createSequentialThinkingServer } from "./server";
 import { getThoughtStore } from "./store-client";
 import { githubOAuthResponse } from "./oauth";
+import {
+  createAuthorizationServer,
+  isMcpRoute,
+  type McpRoute,
+  mcpResource
+} from "./oauth-server";
 
 export { ThoughtStore } from "./thought-store";
 
@@ -231,34 +240,50 @@ const mcpApiHandler = {
   }
 } satisfies ExportedHandler<WorkerEnv>;
 
-const oauthProvider = new OAuthProvider<WorkerEnv>({
-  apiRoute: ["/mcp", "/mcp-compat"],
-  apiHandler: mcpApiHandler,
-  defaultHandler: publicHandler,
-  authorizeEndpoint: "/authorize",
-  tokenEndpoint: "/token",
-  clientRegistrationEndpoint: "/register",
-  allowPlainPKCE: false,
-  allowImplicitFlow: false,
-  resourceMetadata: {
-    bearer_methods_supported: ["header"],
-    resource_name: "Durable Thinking MCP"
-  },
-  onError({ status, code, internal }) {
-    // Keep diagnostics to protocol codes and the provider's structured reason
-    // tags. Never log descriptions, headers, or requests: those can carry
-    // attacker-controlled text or credentials.
-    console.error(
-      JSON.stringify({
-        event: "oauth_provider_error",
-        status,
-        code,
-        internalCategory: internal?.category,
-        internalReason: internal?.reason
-      })
-    );
-  }
-});
+type OAuthRoles = {
+  authorizationServer: OAuthAuthorizationServer<WorkerEnv>;
+  resourceServers: Record<McpRoute, OAuthResourceServer<WorkerEnv>>;
+};
+
+// Each MCP route advertises metadata whose `resource` is the exact
+// client-entered URL. Resources are built from the request origin, as 0.x
+// derived them, so production (workers.dev), `wrangler dev` and tests each
+// advertise their own URLs. Cloudflare routes requests to this Worker by
+// hostname, so the set of origins is small; the cache is capped anyway.
+const oauthRolesByOrigin = new Map<string, OAuthRoles>();
+const MAX_CACHED_ORIGINS = 8;
+
+function oauthRoles(requestUrl: URL): OAuthRoles {
+  const origin = requestUrl.origin;
+  const cached = oauthRolesByOrigin.get(origin);
+  if (cached) return cached;
+
+  const authorizationServer = createAuthorizationServer(origin);
+  const resourceServer = (route: McpRoute) =>
+    new OAuthResourceServer<WorkerEnv>({
+      resourceMetadata: {
+        resource: mcpResource(origin, route),
+        authorization_servers: [origin],
+        bearer_methods_supported: ["header"],
+        resource_name: "Durable Thinking MCP"
+      },
+      validateToken: (env) => (resource, token) =>
+        authorizationServer.validateToken(resource, token, env),
+      handler: mcpApiHandler
+    });
+
+  const roles: OAuthRoles = {
+    authorizationServer,
+    resourceServers: {
+      "/mcp": resourceServer("/mcp"),
+      "/mcp-compat": resourceServer("/mcp-compat")
+    }
+  };
+  if (oauthRolesByOrigin.size < MAX_CACHED_ORIGINS) oauthRolesByOrigin.set(origin, roles);
+  return roles;
+}
+
+const PROTECTED_RESOURCE_METADATA_PREFIX = "/.well-known/oauth-protected-resource";
 
 const TOKEN_GRANT_PROPAGATION_RETRY_DELAYS_MS = [0, 200, 400, 800, 1600];
 
@@ -275,7 +300,7 @@ function isGrantPropagationDelay(body: unknown): boolean {
   );
 }
 
-// workers-oauth-provider 0.10.2 stores the authorization-code/refresh-token
+// workers-oauth-provider (0.10 and 1.x) stores the authorization-code/refresh-token
 // grant in Workers KV and reads it back by key at /token — no retry, no
 // alternate consistency mode (the library's own draft storage-provider RFC,
 // cloudflare/workers-oauth-provider#237, documents that KV "explicitly
@@ -290,6 +315,7 @@ function isGrantPropagationDelay(body: unknown): boolean {
 // oauth.ts). Retrying is safe: the not-found path never mutates the grant,
 // so replaying the same request just gives KV replication time to catch up.
 async function fetchTokenEndpoint(
+  authorizationServer: OAuthAuthorizationServer<WorkerEnv>,
   request: Request,
   env: WorkerEnv,
   ctx: ExecutionContext
@@ -303,7 +329,7 @@ async function fetchTokenEndpoint(
       headers: request.headers,
       body: bodyText
     });
-    response = await oauthProvider.fetch(attemptRequest, env, ctx);
+    response = await authorizationServer.fetch(attemptRequest, env, ctx);
     if (response.status !== 400) return response;
     let parsedBody: unknown;
     try {
@@ -324,24 +350,45 @@ export default {
     env: WorkerEnv,
     ctx: ExecutionContext
   ): Promise<Response> {
-    const pathname = new URL(request.url).pathname;
-    const isMcpRequest = pathname === "/mcp" || pathname === "/mcp-compat";
+    const url = new URL(request.url);
+    const pathname = url.pathname;
 
-    if (isMcpRequest) {
+    if (isMcpRoute(pathname)) {
       const staticAuth = await authenticate(request, env);
       if (staticAuth.ok || request.method === "OPTIONS") {
         return mcpApiHandler.fetch(request, env);
       }
+      return oauthRoles(url).resourceServers[pathname].fetch(request, env, ctx);
     }
 
-    // OAuthProvider treats apiRoute values as prefixes. Keep the original
-    // exact-route 404 behavior for lookalike paths such as /mcp-other.
-    if (!isMcpRequest && pathname.startsWith("/mcp")) {
+    // Keep the original exact-route 404 behavior for lookalike paths such as
+    // /mcp-other.
+    if (pathname.startsWith("/mcp")) {
       return publicHandler.fetch(request, env, ctx);
     }
 
-    return pathname === "/token" && request.method === "POST"
-      ? fetchTokenEndpoint(request, env, ctx)
-      : oauthProvider.fetch(request, env, ctx);
+    const roles = oauthRoles(url);
+
+    if (pathname.startsWith(PROTECTED_RESOURCE_METADATA_PREFIX)) {
+      const route = pathname.slice(PROTECTED_RESOURCE_METADATA_PREFIX.length);
+      return isMcpRoute(route)
+        ? roles.resourceServers[route].fetch(request, env, ctx)
+        : withCorsAndSecurity(json({ error: "Not found" }, 404));
+    }
+
+    if (pathname === "/authorize" || pathname === "/callback") {
+      const oauthEnv: WorkerEnv = {
+        ...env,
+        OAUTH_PROVIDER: roles.authorizationServer.getOAuthApi(env)
+      };
+      return publicHandler.fetch(request, oauthEnv, ctx);
+    }
+
+    if (pathname === "/token" && request.method === "POST") {
+      return fetchTokenEndpoint(roles.authorizationServer, request, env, ctx);
+    }
+
+    const response = await roles.authorizationServer.fetch(request, env, ctx);
+    return response.status === 404 ? publicHandler.fetch(request, env, ctx) : response;
   }
 } satisfies ExportedHandler<WorkerEnv>;
