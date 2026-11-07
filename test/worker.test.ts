@@ -3,6 +3,7 @@ import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test"
 import { describe, expect, it } from "vitest";
 import type { WorkerEnv } from "../src/config";
 import worker from "../src/index";
+import { createAuthorizationServer, type McpRoute } from "../src/oauth-server";
 
 const workerEnv = env as unknown as WorkerEnv;
 const token = "test-token-0123456789abcdef0123456789abcdef";
@@ -221,18 +222,68 @@ describe("Worker routes", () => {
     expect(body.result?.serverInfo?.version).toBe("3.1.4");
   });
 
-  it("serves OAuth protected-resource metadata", async () => {
-    const response = await fetch(
-      new Request("https://example.com/.well-known/oauth-protected-resource")
-    );
-    const body = (await response.json()) as {
-      resource?: string;
-      authorization_servers?: string[];
+  it("serves path-specific OAuth protected-resource metadata for each endpoint", async () => {
+    for (const route of ["/mcp", "/mcp-compat"]) {
+      const response = await fetch(
+        new Request(`https://example.com/.well-known/oauth-protected-resource${route}`)
+      );
+      const body = (await response.json()) as {
+        resource?: string;
+        authorization_servers?: string[];
+        bearer_methods_supported?: string[];
+        resource_name?: string;
+      };
+
+      expect(response.status).toBe(200);
+      expect(body.resource).toBe(`https://example.com${route}`);
+      expect(body.authorization_servers).toEqual(["https://example.com"]);
+      expect(body.bearer_methods_supported).toEqual(["header"]);
+      expect(body.resource_name).toBe("Durable Thinking MCP");
+    }
+  });
+
+  it("does not advertise origin-level or unknown protected resources", async () => {
+    // workers-oauth-provider 1.x has no origin-level resource: only the two
+    // MCP endpoints are protected resources.
+    for (const path of ["", "/mcp-other", "/mcp/extra"]) {
+      const response = await fetch(
+        new Request(`https://example.com/.well-known/oauth-protected-resource${path}`)
+      );
+      expect(response.status).toBe(404);
+    }
+  });
+
+  it("binds OAuth access tokens to the endpoint they were issued for", async () => {
+    const tokens = {
+      "/mcp": await issueAccessToken("https://example.com/mcp"),
+      "/mcp-compat": await issueAccessToken("https://example.com/mcp-compat")
+    };
+    // Clients that omit `resource` (pre-RFC 8707) get the documented
+    // /mcp-compat connection URL.
+    const defaulted = await issueAccessToken(undefined);
+
+    const accepted = async (route: McpRoute, accessToken: string) => {
+      const response = await fetch(oauthInitialize(route, accessToken));
+      return response.status !== 401;
     };
 
-    expect(response.status).toBe(200);
-    expect(body.resource).toBe("https://example.com");
-    expect(body.authorization_servers).toEqual(["https://example.com"]);
+    expect(await accepted("/mcp", tokens["/mcp"])).toBe(true);
+    expect(await accepted("/mcp-compat", tokens["/mcp-compat"])).toBe(true);
+    expect(await accepted("/mcp-compat", defaulted)).toBe(true);
+
+    expect(await accepted("/mcp-compat", tokens["/mcp"])).toBe(false);
+    expect(await accepted("/mcp", tokens["/mcp-compat"])).toBe(false);
+    expect(await accepted("/mcp", defaulted)).toBe(false);
+
+    const compat = await fetch(oauthInitialize("/mcp-compat", tokens["/mcp-compat"]));
+    expect(compat.status).toBe(200);
+
+    const rejected = await fetch(oauthInitialize("/mcp", tokens["/mcp-compat"]));
+    expect(rejected.status).toBe(401);
+    expect(rejected.headers.get("WWW-Authenticate")).toContain('error="invalid_token"');
+    expect(rejected.headers.get("WWW-Authenticate")).toContain(
+      'resource_metadata="https://example.com/.well-known/oauth-protected-resource/mcp"'
+    );
   });
 
   it("serves OAuth authorization-server metadata with DCR", async () => {
@@ -267,3 +318,97 @@ describe("Worker routes", () => {
     expect(response.headers.get("WWW-Authenticate")).toContain("resource_metadata");
   });
 });
+
+function oauthInitialize(route: McpRoute, accessToken: string): Request {
+  return new Request(`https://example.com${route}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json, text/event-stream",
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "vitest", version: "1.0.0" }
+      }
+    })
+  });
+}
+
+function base64Url(bytes: ArrayBuffer): string {
+  return btoa(String.fromCharCode(...new Uint8Array(bytes)))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+}
+
+// Runs DCR, the provider's consent completion (standing in for the GitHub
+// callback, which calls the same helper) and the worker's /token endpoint.
+async function issueAccessToken(resource: string | undefined): Promise<string> {
+  const redirectUri = "https://claude.ai/api/mcp/auth_callback";
+  const registration = await fetch(
+    new Request("https://example.com/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_name: "Audience test client",
+        redirect_uris: [redirectUri],
+        token_endpoint_auth_method: "none",
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"]
+      })
+    })
+  );
+  expect(registration.status).toBe(201);
+  const { client_id: clientId } = (await registration.json()) as { client_id: string };
+
+  const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)).buffer);
+  const challenge = base64Url(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))
+  );
+  const authorize = new URL("https://example.com/authorize");
+  authorize.searchParams.set("response_type", "code");
+  authorize.searchParams.set("client_id", clientId);
+  authorize.searchParams.set("redirect_uri", redirectUri);
+  authorize.searchParams.set("code_challenge", challenge);
+  authorize.searchParams.set("code_challenge_method", "S256");
+  authorize.searchParams.set("state", "audience-test");
+  if (resource) authorize.searchParams.set("resource", resource);
+
+  const helpers = createAuthorizationServer("https://example.com").getOAuthApi(workerEnv);
+  const authRequest = await helpers.parseAuthRequest(new Request(authorize));
+  const { redirectTo } = await helpers.completeAuthorization({
+    request: authRequest,
+    userId: "github-1",
+    metadata: { githubLogin: "vitest" },
+    scope: authRequest.scope,
+    props: { githubLogin: "vitest" }
+  });
+  const code = new URL(redirectTo).searchParams.get("code");
+  expect(code).toBeTruthy();
+
+  const tokenResponse = await fetch(
+    new Request("https://example.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: code!,
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        code_verifier: verifier
+      })
+    })
+  );
+  expect(tokenResponse.status).toBe(200);
+  const { access_token: accessToken } = (await tokenResponse.json()) as {
+    access_token: string;
+  };
+  expect(accessToken).toBeTruthy();
+  return accessToken;
+}

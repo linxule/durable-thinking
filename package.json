@@ -22,14 +22,14 @@
     "check:registry": "node scripts/check-registry-manifest.mjs"
   },
   "dependencies": {
-    "@cloudflare/workers-oauth-provider": "0.10.3",
+    "@cloudflare/workers-oauth-provider": "1.2.4",
     "@modelcontextprotocol/server": "2.4.0",
-    "zod": "4.6.6"
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/vitest-pool-workers": "^0.23.0",
     "@cloudflare/workers-types": "^5.20260808.1",
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.6",
     "typescript": "7.0.2",
     "vitest": "^4.1.11",
     "wrangler": "^4.131.2"
