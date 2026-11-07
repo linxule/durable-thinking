@@ -219,7 +219,7 @@ describe("Worker routes", () => {
     const body = JSON.parse(dataLine!.slice("data:".length)) as {
       result?: { serverInfo?: { version?: string } };
     };
-    expect(body.result?.serverInfo?.version).toBe("3.1.4");
+    expect(body.result?.serverInfo?.version).toBe("3.2.0");
   });
 
   it("serves path-specific OAuth protected-resource metadata for each endpoint", async () => {

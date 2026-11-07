@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.2.0 — 2026-11-08
+
+OAuth library upgrade.
+
+- Upgrade `@cloudflare/workers-oauth-provider` from 0.10.3 to 1.2.4. `/mcp` and `/mcp-compat` stay distinct protected resources: each publishes metadata naming its exact URL, and an access token is accepted only on the endpoint it was issued for. Clients that send no `resource` parameter get `/mcp-compat`.
+- Remove the origin-level `/.well-known/oauth-protected-resource` document, which 1.x does not support. The 401 challenges on both endpoints already pointed clients to the path-specific documents.
+- Update Zod to 4.6.7, `@cloudflare/vitest-pool-workers` to 0.23 and `@types/node`.
+- Preserve MCP tools, the static bearer path, app behavior, storage ownership and existing data.
+
 ## 3.1.4 — 2026-11-07
 
 Dependency security maintenance release.

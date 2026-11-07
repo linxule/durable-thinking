@@ -126,7 +126,7 @@ const publicHandler = {
     if (url.pathname === "/" && (request.method === "GET" || request.method === "HEAD")) {
       const body = {
         name: "Persistent Sequential Thinking MCP",
-        version: "3.1.4",
+        version: "3.2.0",
         protocol: "MCP 2026-07-28 stateless HTTP",
         persistence: "SQLite-backed Cloudflare Durable Object",
         continuity: "Explicit sequenceId tool argument — the unguessable ID is the capability that scopes a sequence to its conversation",
