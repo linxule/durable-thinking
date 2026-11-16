@@ -28,11 +28,11 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.23.0",
-    "@cloudflare/workers-types": "^5.20260808.1",
+    "@cloudflare/workers-types": "^5.20261113.1",
     "@types/node": "^26.6.6",
     "typescript": "7.0.2",
     "vitest": "^4.1.11",
-    "wrangler": "^4.131.2"
+    "wrangler": "^4.161.0"
   },
   "cloudflare": {
     "bindings": {
